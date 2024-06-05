@@ -1,5 +1,5 @@
 use linux_embedded_hal::I2cdev;
-use pwm_pca9685::{Channel, Pca9685, Address};
+use pwm_pca9685::{Channel, Pca9685};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use once_cell::sync::Lazy;

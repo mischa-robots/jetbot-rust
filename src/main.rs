@@ -1,31 +1,33 @@
 mod motor;
+mod robot;
 
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use std::sync::Arc;
-use motor::{Motor, MotorBoard};
+use crate::motor::{MotorBoard};
+use crate::robot::Robot;
+use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
 async fn health_check() -> impl Responder {
     HttpResponse::Ok().body("Healthy")
 }
 
-#[actix_web::main]
+#[tokio::main]  // Changed to use `tokio::main` macro
 async fn main() -> std::io::Result<()> {
-    let motor_board = Arc::new(MotorBoard::new("/dev/i2c-1", 0x60));
+    let motor_board = Arc::new(Mutex::new(MotorBoard::new("/dev/i2c-1", 0x60)));
+    let robot = Arc::new(Robot::new(motor_board.clone()));
 
-    let motor_board_clone = motor_board.clone();
+    let robot_clone = robot.clone();
     tokio::spawn(async move {
-        // Run the motor for 3 seconds and then stop it
-        motor_board_clone.set_motor_speed(Motor::Motor1, 2047, true);
-        motor_board_clone.set_motor_speed(Motor::Motor2, 2047, true);
-        sleep(Duration::from_secs(5)).await;
-        motor_board_clone.stop_motor(Motor::Motor1);
-        motor_board_clone.stop_motor(Motor::Motor2);
+        // Example usage: drive the robot for 1 seconds and then stop it
+        robot_clone.drive(1.0, 1.0).await;
+        sleep(Duration::from_secs(1)).await;
+        robot_clone.stop().await;
     });
 
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(motor_board.clone()))
+            .app_data(web::Data::new(robot.clone()))
             .route("/health", web::get().to(health_check))
     })
     .bind("0.0.0.0:8000")?
