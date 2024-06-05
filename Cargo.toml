@@ -1,0 +1,13 @@
+[package]
+name = "jetbot-rust"
+version = "0.1.0"
+authors = ["Mischa <mischa-robots@gmail.com>"]
+homepage = "https://mischa-robots.github.io/"
+repository = "https://github.com/mischa-robots/jetbot-rust"
+edition = "2021"
+
+[dependencies]
+actix-web = "4.6.0"
+
+[profile.dev]
+incremental = true
