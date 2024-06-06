@@ -1,42 +1,100 @@
 use std::sync::Arc;
 use crate::motor::{Motor, MotorBoard};
 use tokio::sync::Mutex;
+use tokio::time::{sleep, Duration};
 
 pub struct Robot {
     motor_board: Arc<Mutex<MotorBoard>>,
+    target_left_speed: Mutex<f32>,
+    target_right_speed: Mutex<f32>,
 }
 
 impl Robot {
-    pub fn new(motor_board: Arc<Mutex<MotorBoard>>) -> Self {
-        Robot { motor_board }
+    pub fn new(motor_board: Arc<Mutex<MotorBoard>>) -> Arc<Self> {
+        let robot = Arc::new(Robot {
+            motor_board,
+            target_left_speed: Mutex::new(0.0),
+            target_right_speed: Mutex::new(0.0),
+        });
+
+        // Spawn a task to smoothly adjust motor speeds
+        let robot_clone = Arc::clone(&robot);
+        tokio::spawn(async move {
+            robot_clone.smooth_motor_adjustment().await;
+        });
+
+        robot
     }
 
-    pub async fn drive(&self, left: f32, right: f32) {  // Renamed from `move` to `drive`
-        let motor_board = self.motor_board.lock().await;
+    pub async fn drive(&self, left: f32, right: f32) {
+        let mut target_left_speed = self.target_left_speed.lock().await;
+        let mut target_right_speed = self.target_right_speed.lock().await;
 
-        let left_speed = (left * 2047.0).round() as u16;
-        let right_speed = (right * 2047.0).round() as u16;
-
-        if left > 0.0 {
-            motor_board.set_motor_speed(Motor::Motor1, left_speed, true);
-        } else if left < 0.0 {
-            motor_board.set_motor_speed(Motor::Motor1, left_speed, false);
-        } else {
-            motor_board.stop_motor(Motor::Motor1);
-        }
-
-        if right > 0.0 {
-            motor_board.set_motor_speed(Motor::Motor2, right_speed, true);
-        } else if right < 0.0 {
-            motor_board.set_motor_speed(Motor::Motor2, right_speed, false);
-        } else {
-            motor_board.stop_motor(Motor::Motor2);
-        }
+        *target_left_speed = left;
+        *target_right_speed = right;
     }
 
     pub async fn stop(&self) {
-        let motor_board = self.motor_board.lock().await;
-        motor_board.stop_motor(Motor::Motor1);
-        motor_board.stop_motor(Motor::Motor2);
+        let mut target_left_speed = self.target_left_speed.lock().await;
+        let mut target_right_speed = self.target_right_speed.lock().await;
+
+        *target_left_speed = 0.0;
+        *target_right_speed = 0.0;
+    }
+
+    async fn smooth_motor_adjustment(self: Arc<Self>) {
+        const ADJUSTMENT_STEP: f32 = 0.01;
+        const INTERVAL: Duration = Duration::from_millis(10);
+
+        let mut current_left_speed = 0.0;
+        let mut current_right_speed = 0.0;
+
+        loop {
+            let target_left_speed = *self.target_left_speed.lock().await;
+            let target_right_speed = *self.target_right_speed.lock().await;
+
+            if (current_left_speed - target_left_speed).abs() > ADJUSTMENT_STEP {
+                if current_left_speed < target_left_speed {
+                    current_left_speed += ADJUSTMENT_STEP;
+                } else {
+                    current_left_speed -= ADJUSTMENT_STEP;
+                }
+            } else {
+                current_left_speed = target_left_speed;
+            }
+
+            if (current_right_speed - target_right_speed).abs() > ADJUSTMENT_STEP {
+                if current_right_speed < target_right_speed {
+                    current_right_speed += ADJUSTMENT_STEP;
+                } else {
+                    current_right_speed -= ADJUSTMENT_STEP;
+                }
+            } else {
+                current_right_speed = target_right_speed;
+            }
+
+            let left_pwm = (current_left_speed.abs() * 4095.0).round() as u16;
+            let right_pwm = (current_right_speed.abs() * 4095.0).round() as u16;
+
+            let motor_board = self.motor_board.lock().await;
+
+            if current_left_speed > 0.0 {
+                motor_board.set_motor_speed(Motor::Motor1, left_pwm, true);
+            } else if current_left_speed < 0.0 {
+                motor_board.set_motor_speed(Motor::Motor1, left_pwm, false);
+            } else {
+                motor_board.stop_motor(Motor::Motor1);
+            }
+
+            if current_right_speed > 0.0 {
+                motor_board.set_motor_speed(Motor::Motor2, right_pwm, true);
+            } else if current_right_speed < 0.0 {
+                motor_board.set_motor_speed(Motor::Motor2, right_pwm, false);
+            } else {
+                motor_board.stop_motor(Motor::Motor2);
+            }
+
+            sleep(INTERVAL).await;
+        }
     }
 }

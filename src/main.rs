@@ -12,16 +12,22 @@ async fn health_check() -> impl Responder {
     HttpResponse::Ok().body("Healthy")
 }
 
-#[tokio::main]  // Changed to use `tokio::main` macro
+#[tokio::main]
 async fn main() -> std::io::Result<()> {
     let motor_board = Arc::new(Mutex::new(MotorBoard::new("/dev/i2c-1", 0x60)));
-    let robot = Arc::new(Robot::new(motor_board.clone()));
+    let robot = Robot::new(motor_board.clone());
 
+    // Example usage: drive the robot for 5 seconds and then stop it
     let robot_clone = robot.clone();
     tokio::spawn(async move {
-        // Example usage: drive the robot for 1 seconds and then stop it
         robot_clone.drive(1.0, 1.0).await;
-        sleep(Duration::from_secs(1)).await;
+        sleep(Duration::from_secs(5)).await;
+        robot_clone.drive(-1.0, -1.0).await;
+        sleep(Duration::from_secs(5)).await;
+        robot_clone.drive(1.0, -1.0).await;
+        sleep(Duration::from_secs(5)).await;
+        robot_clone.drive(-1.0, 1.0).await;
+        sleep(Duration::from_secs(5)).await;
         robot_clone.stop().await;
     });
 
