@@ -10,7 +10,6 @@ use std::sync::Arc;
 use crate::motor::MotorBoard;
 use crate::robot::Robot;
 use tokio::sync::Mutex;
-use tokio::time::{sleep, Duration};
 use std::path::PathBuf;
 use serde_json;
 use actix::prelude::*;  // Corrected import
@@ -26,8 +25,10 @@ async fn health_check() -> impl Responder {
 }
 
 async fn drive_robot(robot: web::Data<Arc<Robot>>, params: web::Query<DriveParams>) -> impl Responder {
-    robot.drive(params.left, params.right).await;
-    HttpResponse::Ok().body("Driving")
+    let left = params.left;
+    let right = params.right;
+    robot.drive(left, right).await;
+    HttpResponse::Ok().body("Driving") 
 }
 
 async fn index() -> actix_web::Result<NamedFile> {
@@ -47,6 +48,13 @@ impl RobotControl {
 
 impl Actor for RobotControl {
     type Context = ws::WebsocketContext<Self>;
+
+    fn stopped(&mut self, _ctx: &mut Self::Context) {
+        let robot = self.robot.clone();
+        actix_rt::spawn(async move {
+            robot.stop().await;
+        });
+    }
 }
 
 #[derive(Deserialize)]
@@ -67,6 +75,13 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for RobotControl {
                 }
             }
             Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
+            Ok(ws::Message::Close(_reason)) => {
+                let robot = self.robot.clone();
+                actix_rt::spawn(async move {
+                    robot.stop().await;
+                });
+                ctx.stop(); // Close the WebSocket connection
+            }
             _ => (),
         }
     }
