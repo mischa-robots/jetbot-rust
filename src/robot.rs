@@ -7,14 +7,18 @@ pub struct Robot {
     motor_board: Arc<Mutex<MotorBoard>>,
     target_left_speed: Mutex<f32>,
     target_right_speed: Mutex<f32>,
+    left_motor_factor: f32,
+    right_motor_factor: f32,
 }
 
 impl Robot {
-    pub fn new(motor_board: Arc<Mutex<MotorBoard>>) -> Arc<Self> {
+    pub fn new(motor_board: Arc<Mutex<MotorBoard>>, left_motor_factor: f32, right_motor_factor: f32) -> Arc<Self> {
         let robot = Arc::new(Robot {
             motor_board,
             target_left_speed: Mutex::new(0.0),
             target_right_speed: Mutex::new(0.0),
+            left_motor_factor,
+            right_motor_factor,
         });
 
         // Spawn a task to smoothly adjust motor speeds
@@ -30,8 +34,8 @@ impl Robot {
         let mut target_left_speed = self.target_left_speed.lock().await;
         let mut target_right_speed = self.target_right_speed.lock().await;
 
-        *target_left_speed = left;
-        *target_right_speed = right;
+        *target_left_speed = left * self.left_motor_factor;
+        *target_right_speed = right * self.right_motor_factor;
     }
 
     pub async fn stop(&self) {

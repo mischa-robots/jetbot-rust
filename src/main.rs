@@ -100,7 +100,7 @@ async fn robot_ws(
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let motor_board = Arc::new(Mutex::new(MotorBoard::new("/dev/i2c-1", 0x60)));
-    let robot = Robot::new(motor_board.clone());
+    let robot = Robot::new(motor_board.clone(), -1.0, 1.0);
 
     HttpServer::new(move || {
         App::new()
