@@ -47,7 +47,7 @@ impl Robot {
     }
 
     async fn smooth_motor_adjustment(self: Arc<Self>) {
-        const ADJUSTMENT_STEP: f32 = 0.01;
+        const ADJUSTMENT_STEP: f32 = 0.1;
         const INTERVAL: Duration = Duration::from_millis(10);
 
         let mut current_left_speed = 0.0;

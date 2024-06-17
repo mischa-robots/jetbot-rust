@@ -27,3 +27,4 @@ services:
       retries: 3
     logging:
       driver: "none"  # Disable logging
+    restart: unless-stopped
